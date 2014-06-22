@@ -63,19 +63,35 @@ class HyperResource
           return unless resp['_links']
           links = rsrc.links
 
+          curies = resp['_links']['curies']
+
           resp['_links'].each do |rel, link_spec|
             if link_spec.is_a? Array
               links[rel] = link_spec.map do |link|
-                new_link_from_spec(rsrc, link)
+                new_link_from_spec(rsrc, link, rel, curies)
               end
             else
-              links[rel] = new_link_from_spec(rsrc, link_spec)
+              links[rel] = new_link_from_spec(rsrc, link_spec, rel, curies)
             end
           end
         end
 
-        def new_link_from_spec(resource, link_spec)
+        def new_link_from_spec(resource, link_spec, rel, curies)
+          if m=rel.match(/(.+):.+/)
+            link_spec['base_url'] = find_base_url_for_curie(m[1], curies)
+          end
+
           resource.class::Link.new(resource, link_spec)
+        end
+
+        
+        def find_base_url_for_curie(curie_name, curies)
+          if curies.is_a?(Array) and ind=curies.index{|c| c['name'] == curie_name }
+            url = curies[ind]['href']
+          elsif curies['name'] == curie_name
+            url = curies['href']
+          end
+          url.sub(/\{.*\}$/, '')
         end
 
 

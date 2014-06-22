@@ -20,6 +20,9 @@ class HyperResource
 
     include HyperResource::Modules::HTTP
 
+    ## The URL the base_href appends to_s
+    attr_accessor :base_url
+
     ## The literal href of this link; may be templated.
     attr_accessor :base_href
 
@@ -42,13 +45,14 @@ class HyperResource
     ## hash.  `link_spec` keys are: `href` (string, required), `templated`
     ## (boolean), `params` (hash), and `default_method` (string, default
     ## `"get"`).
-    def initialize(resource, link_spec={})
+    def initialize(resource, link_spec={})      
       unless link_spec.kind_of?(Hash)
         raise ArgumentError, "link_spec must be a Hash (got #{link_spec.inspect})"
       end
       link_spec = Hash[ link_spec.map{|(k,v)| [k.to_s, v]} ] ## stringify keys
 
       self.resource = resource
+      self.base_url = link_spec['base_url'] || resource.root
       self.base_href = link_spec['href']
       self.name = link_spec['name']
       self.templated = !!link_spec['templated']
@@ -66,11 +70,16 @@ class HyperResource
       end
     end
 
-    ## Returns this link's fully resolved URL, or nil if `resource.root`
+    ## Returns this link's fully resolved URL, or nil if `base_url`
     ## or `href` are malformed.
     def url
       begin
-        URI.join(self.resource.root, self.href.to_s).to_s
+        base_path = URI.parse(self.base_url).path
+        if base_path.empty?
+          URI.join(self.base_url, self.href.to_s).to_s
+        else
+          URI.join(self.base_url, base_path, self.href.to_s.sub('/', '')).to_s
+        end
       rescue StandardError
         nil
       end
@@ -81,6 +90,7 @@ class HyperResource
     def where(params)
       params = Hash[ params.map{|(k,v)| [k.to_s, v]} ]
       self.class.new(self.resource,
+                     'base_url' => self.base_url,
                      'href' => self.base_href,
                      'name' => self.name,
                      'templated' => self.templated,
